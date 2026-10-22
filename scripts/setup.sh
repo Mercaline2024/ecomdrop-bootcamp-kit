@@ -437,7 +437,10 @@ printf "Log: %s\n" "$LOG"
 paso_base
 paso_node
 
-if [ "$MODO" = asistente ] && [ -e /dev/tty ]; then
+# ¿hay una terminal de verdad? (con «curl | bash» stdin es el script; /dev/tty existe aunque no se pueda abrir)
+hay_terminal(){ [ -z "${CI:-}" ] && (exec </dev/tty) 2>/dev/null; }
+
+if [ "$MODO" = asistente ] && hay_terminal; then
   titulo "Asistente de instalación"
   info "Se abrirá tu navegador. Sigue las pestañas en orden; esta ventana debe quedar abierta."
   exec node "$KIT/asistente/servidor.mjs"
@@ -451,7 +454,7 @@ if [ "$MODO" = minimo ]; then
   printf "   1. Inicia sesión con tu cuenta de claude.ai (Pro o Max) cuando Claude lo pida.\n"
   printf "   2. Escribe:  %s/ecomdrop-bootcamp:instalar%s\n\n" "$C_NEGRITA" "$C_FIN"
   printf "   Si cierras esta ventana: abre una terminal nueva, escribe  claude  y sigue desde el paso 2.\n\n"
-  if [ -e /dev/tty ] && [ -z "${CI:-}" ]; then
+  if hay_terminal; then
     cd "$HOME"
     exec claude </dev/tty >/dev/tty 2>&1
   fi
