@@ -1,0 +1,4 @@
+requests>=2.31  # http
+Pillow[avif]>=10
+-r otros.txt
+openpyxl==3.1.5 ; python_version >= "3.9"

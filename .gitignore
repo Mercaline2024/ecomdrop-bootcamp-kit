@@ -1,0 +1,19 @@
+# secretos
+.env
+*.env
+!config/.env.example
+
+# sistema, dependencias y salidas
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc
+*.log
+doctor-report*.json
+
+# copia exportada del SIE: se publica como release privado, no va en este repo
+/sie/
+/dist/
+
+# fixtures de prueba del doctor (sin secretos)
+!doctor/test/fixtures/**/.env

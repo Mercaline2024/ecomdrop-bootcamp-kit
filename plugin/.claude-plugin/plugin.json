@@ -1,0 +1,8 @@
+{
+  "name": "ecomdrop-bootcamp",
+  "version": "1.0.0",
+  "description": "Kit del Ecomdrop Bootcamp para Claude Code: deja listo cualquier proyecto (/setup-proyecto), revisa el equipo, genera reportes para soporte y conecta el MCP oficial de Dropi.",
+  "author": { "name": "Elkin García", "url": "https://www.instagram.com/elkingarcia.ia" },
+  "keywords": ["ecomdrop", "bootcamp", "shopify", "dropi", "setup", "doctor"],
+  "license": "UNLICENSED"
+}

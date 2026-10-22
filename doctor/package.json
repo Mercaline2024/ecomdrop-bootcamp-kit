@@ -1,0 +1,11 @@
+{
+  "name": "ecomdrop-doctor",
+  "version": "1.0.0",
+  "description": "Revisa un proyecto o el equipo del estudiante del Ecomdrop Bootcamp e instala lo que falta.",
+  "type": "module",
+  "private": true,
+  "bin": { "ecomdrop-doctor": "bin/ecomdrop-doctor.mjs" },
+  "engines": { "node": ">=18" },
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "license": "UNLICENSED"
+}

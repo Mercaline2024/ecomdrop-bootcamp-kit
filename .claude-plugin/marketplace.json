@@ -1,0 +1,12 @@
+{
+  "name": "ecomdrop",
+  "owner": { "name": "Elkin García · Ecomdrop" },
+  "metadata": { "description": "Plugins del Ecomdrop Bootcamp" },
+  "plugins": [
+    {
+      "name": "ecomdrop-bootcamp",
+      "source": "./plugin",
+      "description": "Doctor de proyectos, skill /setup-proyecto, comandos de soporte y el MCP oficial de Dropi para los estudiantes del Ecomdrop Bootcamp."
+    }
+  ]
+}

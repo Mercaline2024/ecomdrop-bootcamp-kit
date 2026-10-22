@@ -1,0 +1,35 @@
+{
+  "_doc": [
+    "MCP locales que usan las skills del SIE. El setup los registra con alcance de usuario (claude mcp add-json -s user).",
+    "Van aquí (y no en el plugin) porque las skills del SIE los llaman por su nombre: mcp__playwright, mcp__dropkiller, mcp__apify. Dentro de un plugin se llamarían mcp__plugin_<plugin>_<servidor>.",
+    "Las variables ${...} se resuelven desde el entorno o el .env del kit; ningún valor real vive en este archivo.",
+    "El MCP oficial de Dropi viene en el plugin ecomdrop-bootcam (plugin/.mcp.json). Los conectores de claude.ai (Shopify, Meta Ads y los de Ecomdrop) NO van aquí: ver config/conectores.md."
+  ],
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
+    },
+    "dropkiller": {
+      "type": "http",
+      "url": "https://app.dropkiller.com/api/mcp",
+      "_opcional": true,
+      "_auth": "OAuth: en Claude Code, /mcp → dropkiller → Authenticate"
+    },
+    "apify": {
+      "type": "http",
+      "url": "https://mcp.apify.com/",
+      "headers": {
+        "Authorization": "Bearer ${APIFY_TOKEN}"
+      },
+      "_opcional": true,
+      "_requiere": [
+        "APIFY_TOKEN"
+      ]
+    }
+  }
+}

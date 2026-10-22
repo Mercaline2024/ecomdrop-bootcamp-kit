@@ -1,0 +1,21 @@
+// Dev container para usar Claude Code SIN confirmaciones (bypassPermissions) de forma aislada.
+// Cópialo a <tu-proyecto>/.devcontainer/devcontainer.json y abre el proyecto en VS Code → «Reopen in Container».
+// Instrucciones y advertencias: docs/permisos.md → «Modo sin confirmaciones solo en un dev container».
+{
+  "name": "Ecomdrop Bootcamp · sandbox de Claude",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24",
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+    "ghcr.io/devcontainers/features/python:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "remoteUser": "node",
+  // La config de Claude del contenedor vive en un volumen propio: NUNCA montes tu ~/.claude, ~/.ssh ni ~/.ecomdrop del equipo.
+  "mounts": [
+    "source=ecomdrop-claude-${devcontainerId},target=/home/node/.claude,type=volume"
+  ],
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/node/.claude"
+  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y ffmpeg imagemagick && pip install 'Pillow>=10' 'openpyxl>=3.1'"
+}

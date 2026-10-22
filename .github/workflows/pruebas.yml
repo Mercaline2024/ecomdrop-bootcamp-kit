@@ -1,0 +1,206 @@
+# Pruebas del Ecomdrop Bootcamp Kit.
+#
+# Instala el kit desde cero en macOS, Windows y Ubuntu, sin interacción, y luego corre el doctor sobre el proyecto de
+# ejemplo. Usa un SIE DE PRUEBA (tests/sie-de-prueba): misma estructura, sin contenido real. Este workflow no usa
+# secretos ni descarga el SIE real, así que sus logs se pueden ver públicamente sin exponer nada.
+name: Pruebas del kit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unitarias:
+    name: Pruebas unitarias y secretos
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Doctor y guardia
+        run: node --test doctor/test/*.test.mjs config/guardia/guardia.test.mjs
+
+      - name: Sintaxis de los scripts
+        run: |
+          bash -n scripts/setup.sh scripts/exportar-sie.sh
+          for f in scripts/*.mjs asistente/servidor.mjs doctor/bin/*.mjs doctor/lib/*.mjs config/guardia/guardia.mjs; do node --check "$f"; done
+
+      - name: La interfaz compilada (asistente/web) está al día
+        run: |
+          cd asistente/ui
+          npm ci --no-audit --no-fund
+          npm run build
+          git diff --stat --exit-code -- ../web || { echo "::error::asistente/web no coincide con asistente/ui: ejecuta «npm run build» y haz commit"; exit 1; }
+
+      - name: Escaneo de secretos (gitleaks)
+        run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest git /repo --no-banner --redact
+
+      - name: Nada del SIE real en el repo
+        run: |
+          if git ls-files | grep -E '^(sie|dist)/'; then echo "::error::sie/ o dist/ no deben estar en el repo"; exit 1; fi
+
+  instalacion:
+    name: Instalación en ${{ matrix.os }}
+    needs: unitarias
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    env:
+      CI: "true"
+      NO_COLOR: "1"
+      ECOMDROP_SALTAR_MODELO: "1"        # el modelo de 1,6 GB no aporta nada a la prueba
+      ECOMDROP_SIE_TARBALL: ${{ github.workspace }}/sie-de-prueba.tar.gz
+      GITHUB_TOKEN: ${{ github.token }}   # solo lectura; evita el límite de la API al bajar whisper en Windows
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SIE de prueba (sin contenido real)
+        shell: bash
+        run: tar -czf sie-de-prueba.tar.gz -C tests/sie-de-prueba sie
+
+      - name: winget en Windows Server
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            Install-PackageProvider -Name NuGet -Force | Out-Null
+            Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery | Out-Null
+            Repair-WinGetPackageManager -AllUsers -Latest
+          }
+          winget --version
+
+      # ── 1. instalación desde cero ──
+      - name: Instalar (macOS / Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/setup.sh --sin-asistente
+
+      - name: Instalar (Windows, PowerShell 5.1)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: .\scripts\setup.ps1 -SinAsistente
+
+      # Los pasos de Actions no recargan el PATH del perfil: se publica para los siguientes.
+      - name: PATH de las herramientas instaladas
+        shell: bash
+        run: |
+          for d in "$HOME/.local/bin" "$HOME/.fnm" "$HOME/.local/share/whisper-cpp"; do [ -d "$d" ] && echo "$d" >> "$GITHUB_PATH"; done
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            powershell -NoProfile -Command "[Environment]::GetEnvironmentVariable('Path','User') -split ';' | Where-Object { \$_ }" | tr -d '\r' >> "$GITHUB_PATH"
+          fi
+          for b in /opt/homebrew/bin /usr/local/bin; do [ -d "$b" ] && echo "$b" >> "$GITHUB_PATH"; done
+          true
+
+      # ── 2. lo instalado está donde debe ──
+      - name: Comprobar la instalación
+        shell: bash
+        run: |
+          set -x
+          eval "$(fnm env --shell bash)" && fnm use lts-latest
+          node --version
+          git --version && gh --version && uv --version && claude --version
+          python3 --version || python --version
+          ffmpeg -version | head -1 && ffprobe -version | head -1
+          command -v whisper-cli
+          SIE="$HOME/proyectos/super-inteligencia-ecommerce"
+          test -f "$SIE/tienda.ejemplo.json"                 # SIE de prueba instalado
+          grep -q '"id"' "$SIE/.instalacion.json"            # marca de agua
+          test -z "$(git -C "$SIE" remote)"                  # repo local sin remoto
+          grep -q 'guardia' "$HOME/.claude/settings.json"    # permisos y guardia del kit
+          grep -q '"disableBypassPermissionsMode": "disable"' "$HOME/.claude/settings.json"
+          test -f "$HOME/.ecomdrop/marketplace/plugin/.claude-plugin/plugin.json"
+          claude plugin validate "$HOME/.ecomdrop/marketplace"
+
+      # ── 3. idempotencia ──
+      - name: Segunda pasada (debe saltar lo instalado)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          inicio=$(date +%s)
+          bash scripts/setup.sh --sin-asistente
+          echo "Segunda pasada: $(( $(date +%s) - inicio )) s"
+
+      - name: Segunda pasada (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: .\scripts\setup.ps1 -SinAsistente
+
+      # ── 4. doctor sobre el proyecto de ejemplo (Node + Python) ──
+      - name: Doctor en examples/proyecto-demo
+        shell: bash
+        run: |
+          eval "$(fnm env --shell bash)" && fnm use lts-latest
+          DOCTOR="node $HOME/.ecomdrop/doctor/bin/ecomdrop-doctor.mjs"
+          cd examples/proyecto-demo
+          echo "::group::Diagnóstico inicial (se esperan problemas)"
+          $DOCTOR && { echo "::error::el doctor debía encontrar dependencias faltantes"; exit 1; } || true
+          echo "::endgroup::"
+          echo "::group::--fix"
+          $DOCTOR --fix || true
+          echo "::endgroup::"
+          $DOCTOR                                  # debe terminar sin errores
+          $DOCTOR --json > reporte.json
+          node -e "const r=require('./reporte.json'); if(!r.resumen.listo) process.exit(1); console.log('listo:', r.resumen)"
+          $DOCTOR --report | grep -q 'fin del reporte'
+
+      - name: El proyecto de ejemplo arranca
+        shell: bash
+        run: |
+          eval "$(fnm env --shell bash)" && fnm use lts-latest
+          cd examples/proyecto-demo
+          node server.js > servidor.log 2>&1 &
+          for _ in $(seq 1 20); do curl -fsS http://127.0.0.1:3000/salud && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3000/salud | grep -q '"ok":true'
+          PY=".venv/bin/python"; [ -x "$PY" ] || PY=".venv/Scripts/python.exe"; [ -x "$PY" ] || PY="$(command -v python3 || command -v python)"
+          "$PY" tareas/resumen.py --check
+
+      # ── 5. una tienda con el SIE de prueba ──
+      - name: Crear una tienda y revisarla
+        shell: bash
+        run: |
+          eval "$(fnm env --shell bash)" && fnm use lts-latest
+          git config --global user.email "ci@ecomdrop.invalid" && git config --global user.name "CI"
+          bash "$HOME/proyectos/super-inteligencia-ecommerce/bin/nueva-tienda.sh" "$HOME/proyectos/tiendas/ci" ci
+          cd "$HOME/proyectos/tiendas/ci"
+          node "$HOME/.ecomdrop/doctor/bin/ecomdrop-doctor.mjs" --fix || true
+          node "$HOME/.ecomdrop/doctor/bin/ecomdrop-doctor.mjs"
+
+      # ── 6. el asistente web arranca y exige su token ──
+      - name: Asistente web (modo demostración)
+        shell: bash
+        run: |
+          eval "$(fnm env --shell bash)" && fnm use lts-latest
+          node asistente/servidor.mjs --demo --no-abrir --puerto 4799 > asistente.log 2>&1 &
+          for _ in $(seq 1 20); do grep -q 't=' asistente.log && break; sleep 1; done
+          TOKEN=$(grep -oE 't=[a-f0-9]+' asistente.log | head -1 | cut -c3-)
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4799/api/info)" = 401
+          curl -fsS -H "X-Ecomdrop-Token: $TOKEN" http://127.0.0.1:4799/api/info | grep -q '"demo":true'
+          curl -fsS "http://127.0.0.1:4799/?t=$TOKEN" | grep -q '__ECOMDROP_TOKEN__'
+
+      - name: Logs del instalador
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.os }}
+          path: |
+            ~/.ecomdrop/logs/
+            ~/.ecomdrop/doctor-report.json
+          if-no-files-found: ignore
