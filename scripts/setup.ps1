@@ -106,6 +106,26 @@ function Winget-Instalar([string]$id, [string]$nombre, [string]$motivoAdmin = ''
   Ok "$nombre instalado"
 }
 
+# npm, pnpm, yarn y fnm se ejecutan en PowerShell a través de scripts .ps1, y Windows los bloquea por defecto
+# («la ejecución de scripts está deshabilitada»). Se activa RemoteSigned solo para el usuario (sin admin):
+# permite los scripts locales y sigue bloqueando los descargados sin firma. Recomendado por Microsoft para desarrollo.
+function Asegurar-PoliticaScripts {
+  $usuario = Get-ExecutionPolicy -Scope CurrentUser
+  if ($usuario -notin 'RemoteSigned', 'Unrestricted', 'Bypass') {
+    $grupo = @((Get-ExecutionPolicy -Scope MachinePolicy), (Get-ExecutionPolicy -Scope UserPolicy)) | Where-Object { "$_" -ne 'Undefined' }
+    if ($grupo) {
+      Aviso "Tu organización fija la política de scripts ($($grupo -join ', ')). Si npm falla en PowerShell, usa npm.cmd o pide a soporte técnico que permita RemoteSigned."
+    } else {
+      Info 'Windows bloquea los scripts de PowerShell, y npm, pnpm y fnm los necesitan.'
+      Info 'Se activa «RemoteSigned» solo para tu usuario: permite los scripts de tu equipo y bloquea los descargados sin firma.'
+      try { Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force -ErrorAction Stop; Ok 'Política de scripts: RemoteSigned (solo tu usuario)' }
+      catch { Aviso "No se pudo cambiar la política de scripts: $($_.Exception.Message)" }
+    }
+  }
+  # para esta ventana, mientras dura la instalación (se hace después: el ámbito de proceso es el más específico)
+  try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop } catch { <# no disponible fuera de Windows #> }
+}
+
 # ───────────────────────── kit ─────────────────────────
 function Ubicar-Kit {
   if ($env:ECOMDROP_KIT -and (Test-Path (Join-Path $env:ECOMDROP_KIT 'asistente\servidor.mjs'))) { return $env:ECOMDROP_KIT }
@@ -398,6 +418,7 @@ function Cerrar-Log {
 }
 
 function Principal {
+  if ($env:OS -eq 'Windows_NT') { Asegurar-PoliticaScripts }
   Recargar-Path
   $script:Kit = Ubicar-Kit
 

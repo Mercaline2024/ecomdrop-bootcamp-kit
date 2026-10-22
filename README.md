@@ -157,6 +157,7 @@ Después de actualizar, `ecomdrop-doctor` en tu tienda confirma que todo quedó 
 | macOS: «Command Line Tools» o Homebrew no termina | Ejecuta `xcode-select --install`, acepta la ventana y vuelve a ejecutar el instalador |
 | macOS: escribo la contraseña y no aparece nada | Es normal: la terminal no muestra la contraseña. Escríbela y pulsa Enter |
 | Windows: `irm no se reconoce` | Estás en «Símbolo del sistema». Abre **PowerShell** y repite |
+| Windows: «la ejecución de scripts está deshabilitada en este sistema» | El instalador lo resuelve solo. Si te pasa después: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` en PowerShell (no necesita administrador) |
 | Windows: falta winget | Instala «App Installer» desde [Microsoft Store](https://apps.microsoft.com/detail/9nblggh4nns1), cierra PowerShell y repite |
 | Windows: aparecen varios avisos de permisos | Acéptalos: son los instaladores oficiales (Git, GitHub CLI, ImageMagick) |
 | Linux: `curl: command not found` | `sudo apt-get install -y curl` y repite |
