@@ -88,12 +88,24 @@ cargar_entorno(){
 }
 
 # Añade una línea al perfil del shell una sola vez (bash y zsh).
+# «@SHELL@» en la línea se reemplaza por el shell de cada archivo (zsh en .zshrc, bash en .bashrc).
 al_perfil(){
-  local linea="$1" marca="# ecomdrop-bootcamp"
+  local plantilla="$1" marca="# ecomdrop-bootcamp" rc sh linea
   for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     [ "$PLATAFORMA" = linux ] && [ "$rc" = "$HOME/.zshrc" ] && [ ! -f "$rc" ] && continue
+    sh=bash; [ "$rc" = "$HOME/.zshrc" ] && sh=zsh
+    linea="${plantilla//@SHELL@/$sh}"
     touch "$rc"
     grep -Fq "$linea" "$rc" || printf '\n%s\n%s\n' "$marca" "$linea" >> "$rc"
+  done
+}
+
+# Versiones anteriores del kit escribían una línea de fnm que dependía de $SHELL (zsh dentro de .bashrc fallaba).
+quitar_linea_vieja(){
+  local vieja='command -v fnm >/dev/null && eval "$(fnm env --use-on-cd --shell "$(basename "${SHELL:-bash}")")"' rc
+  for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+    [ -f "$rc" ] && grep -Fq "$vieja" "$rc" || continue
+    grep -Fv "$vieja" "$rc" > "$rc.ecomdrop.tmp" && cat "$rc.ecomdrop.tmp" > "$rc" && rm -f "$rc.ecomdrop.tmp"
   done
 }
 
@@ -183,7 +195,8 @@ paso_node(){
   fi
   ok "fnm $(fnm --version | awk '{print $2}')"
   al_perfil '[ -d "$HOME/.fnm" ] && export PATH="$HOME/.fnm:$PATH"'
-  al_perfil 'command -v fnm >/dev/null && eval "$(fnm env --use-on-cd --shell "$(basename "${SHELL:-bash}")")"'
+  quitar_linea_vieja
+  al_perfil 'command -v fnm >/dev/null && eval "$(fnm env --use-on-cd --shell @SHELL@)"'
   info "Asegurando la versión LTS de Node…"
   local i
   for i in 1 2 3; do fnm install --lts && break; aviso "La descarga de Node falló (intento $i/3); reintentando…"; sleep 3; done
@@ -395,8 +408,12 @@ paso_config(){
   fi
   # comandos que usa Claude (skill /ecomdrop-bootcamp:instalar) para ejecutar los pasos probados del kit
   printf '#!/usr/bin/env bash\n# Ejecuta un paso del instalador del kit: ecomdrop-paso <id>\nexec bash "%s/scripts/setup.sh" --paso "$@"\n' "$KIT" > "$LOCAL_BIN/ecomdrop-paso"
-  printf '#!/usr/bin/env bash\n# Abre el asistente web (claves, conectores, tienda): ecomdrop-asistente [--seccion claves]\nexec node "%s/asistente/servidor.mjs" "$@"\n' "$KIT" > "$LOCAL_BIN/ecomdrop-asistente"
-  chmod +x "$LOCAL_BIN/ecomdrop-paso" "$LOCAL_BIN/ecomdrop-asistente"
+  # node no siempre está en el PATH (una terminal que no cargó fnm): los comandos usan el Node por defecto de fnm
+  local node_dir; node_dir="$(fnm env --shell bash 2>/dev/null | sed -n 's/^export FNM_DIR="\(.*\)"$/\1/p')/aliases/default/bin"
+  [ -x "$node_dir/node" ] || node_dir="$(dirname "$(command -v node)")"
+  printf '#!/usr/bin/env bash\nexport PATH="%s:$PATH"\nexec node "%s/doctor/bin/ecomdrop-doctor.mjs" "$@"\n' "$node_dir" "$ECOMDROP_HOME" > "$LOCAL_BIN/ecomdrop-doctor"
+  printf '#!/usr/bin/env bash\n# Abre el asistente web (claves, conectores, tienda): ecomdrop-asistente [--seccion claves]\nexport PATH="%s:$PATH"\nexec node "%s/asistente/servidor.mjs" "$@"\n' "$node_dir" "$KIT" > "$LOCAL_BIN/ecomdrop-asistente"
+  chmod +x "$LOCAL_BIN/ecomdrop-doctor" "$LOCAL_BIN/ecomdrop-paso" "$LOCAL_BIN/ecomdrop-asistente"
   ok "Comandos ecomdrop-paso y ecomdrop-asistente disponibles"
 }
 

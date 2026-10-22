@@ -191,6 +191,10 @@ function Paso-node {
   foreach ($i in 1..3) { fnm install --lts; if ($LASTEXITCODE -eq 0) { break }; Aviso "La descarga de Node falló (intento $i/3)"; Start-Sleep 3 }
   if (-not ((fnm list) -match 'lts-latest')) { Fallo 'No se pudo instalar Node LTS con fnm.' }
   Correr 'fnm default falló' { fnm default lts-latest }
+  # node y npm del Node por defecto, en el PATH del usuario: así funcionan en PowerShell, cmd y Git Bash
+  # (Claude Code usa Git Bash, que no carga el perfil de PowerShell donde vive «fnm env»)
+  $fnmDir = (fnm env --json | Out-String | ConvertFrom-Json).FNM_DIR
+  if ($fnmDir -and (Test-Path (Join-Path $fnmDir 'aliases\default\node.exe'))) { Agregar-PathUsuario (Join-Path $fnmDir 'aliases\default') }
   Recargar-Path
   Ok "node $(node --version) · npm $(npm --version)"
 }
