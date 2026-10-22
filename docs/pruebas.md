@@ -30,7 +30,8 @@ iex ([IO.File]::ReadAllText("$PWD\scripts\setup.ps1", [Text.Encoding]::UTF8))
 ```
 
 Para probar la descarga real del SIE con acceso por GitHub: crea una **cuenta de GitHub de prueba**, invítala al equipo
-con lectura sobre `ecomdrop-sie-dist` y no definas `ECOMDROP_SIE_TARBALL`.
+«estudiantes» (`gh api -X PUT orgs/ecomdrop-bootcamp/teams/estudiantes/memberships/<usuario>`), acepta la invitación
+desde su correo y no definas `ECOMDROP_SIE_TARBALL`.
 
 ---
 

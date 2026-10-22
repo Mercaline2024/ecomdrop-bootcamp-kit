@@ -80,7 +80,7 @@ verde "Paquete: dist/sie.tar.gz"
 #   Los estudiantes con acceso de lectura a ese repo (equipo de GitHub del bootcamp) lo descargan con
 #   `gh release download`. Quitar a alguien del equipo le corta el acceso a las actualizaciones.
 if [ "${2:-}" = "--publicar" ] || [ "${1:-}" = "--publicar" ]; then
-  REPO="${ECOMDROP_SIE_REPO:-Mercaline2024/ecomdrop-sie-dist}"
+  REPO="${ECOMDROP_SIE_REPO:-ecomdrop-bootcamp/ecomdrop-sie-dist}"
   TAG="sie-$(git -C "$SIE_SRC" rev-parse --short HEAD)"
   gh release view "$TAG" -R "$REPO" >/dev/null 2>&1 && { rojo "El release $TAG ya existe en $REPO"; exit 1; }
   gh release create "$TAG" -R "$REPO" --latest --title "$TAG" --notes "SIE exportado del commit $(git -C "$SIE_SRC" rev-parse HEAD)" \

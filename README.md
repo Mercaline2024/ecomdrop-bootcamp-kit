@@ -214,8 +214,10 @@ tests/          sie-de-prueba (estructura del SIE sin contenido, para CI)
 
 | Tarea | Cómo |
 |---|---|
-| Publicar una versión nueva del SIE | `bash scripts/exportar-sie.sh --publicar` (limpia datos de clientes y sube `sie.tar.gz` como release del repo privado `ecomdrop-sie-dist`) |
-| Dar o quitar acceso a un estudiante | Agrégalo o quítalo del equipo de GitHub con lectura sobre `ecomdrop-sie-dist` |
+| Publicar una versión nueva del SIE | `bash scripts/exportar-sie.sh --publicar` (limpia datos de clientes y sube `sie.tar.gz` como release del repo privado `ecomdrop-bootcamp/ecomdrop-sie-dist`) |
+| Dar acceso a un estudiante | `gh api -X PUT orgs/ecomdrop-bootcamp/teams/estudiantes/memberships/<usuario-github>` (le llega una invitación por correo; al aceptarla puede descargar el SIE) |
+| Quitar el acceso | `gh api -X DELETE orgs/ecomdrop-bootcamp/teams/estudiantes/memberships/<usuario-github>` (y, si quieres, sácalo de la organización en github.com/orgs/ecomdrop-bootcamp/people) |
+| Ver quién tiene acceso | `gh api orgs/ecomdrop-bootcamp/teams/estudiantes/members -q '.[].login'` |
 | Cambiar la interfaz del asistente | `cd asistente/ui && npm install && npm run build` (compila a `asistente/web`) |
 | Ver el asistente sin instalar nada | `node asistente/servidor.mjs --demo` |
 | Pruebas automáticas | `node --test doctor/test/*.test.mjs config/guardia/guardia.test.mjs` · `claude plugin validate .` · GitHub Actions instala el kit en macOS, Windows y Ubuntu con un SIE de prueba (`.github/workflows/pruebas.yml`) |

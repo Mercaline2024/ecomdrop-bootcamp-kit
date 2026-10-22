@@ -10,7 +10,7 @@
 #
 # Variables útiles:
 #   ECOMDROP_KIT_URL       tarball del kit (por defecto, la rama main en GitHub)
-#   ECOMDROP_SIE_REPO      repo privado con los releases del SIE (por defecto Mercaline2024/ecomdrop-sie-dist)
+#   ECOMDROP_SIE_REPO      repo privado con los releases del SIE (por defecto ecomdrop-bootcamp/ecomdrop-sie-dist)
 #   ECOMDROP_SIE_TARBALL   ruta a un sie.tar.gz local (sin descargar; útil sin internet o en CI)
 #   ECOMDROP_SALTAR_MODELO=1  no descarga el modelo de whisper (1,6 GB)
 #   GH_TOKEN               token de GitHub (CI); si no está, se inicia sesión con el navegador
@@ -23,7 +23,7 @@ ECOMDROP_HOME="${ECOMDROP_HOME:-$HOME/.ecomdrop}"
 PROYECTOS="${ECOMDROP_PROYECTOS:-$HOME/proyectos}"
 SIE_DIR="$PROYECTOS/super-inteligencia-ecommerce"
 KIT_URL="${ECOMDROP_KIT_URL:-https://github.com/Mercaline2024/ecomdrop-bootcamp-kit/archive/refs/heads/main.tar.gz}"
-SIE_REPO="${ECOMDROP_SIE_REPO:-Mercaline2024/ecomdrop-sie-dist}"
+SIE_REPO="${ECOMDROP_SIE_REPO:-ecomdrop-bootcamp/ecomdrop-sie-dist}"
 MODELO_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"
 MODELO="${WHISPER_MODEL:-$HOME/whisper-models/ggml-large-v3-turbo.bin}"
 LOCAL_BIN="$HOME/.local/bin"
