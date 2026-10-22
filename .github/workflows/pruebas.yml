@@ -93,10 +93,13 @@ jobs:
         shell: bash
         run: bash scripts/setup.sh --sin-asistente
 
-      - name: Instalar (Windows, PowerShell 5.1)
+      - name: Instalar (Windows, PowerShell 5.1, igual que «irm | iex»)
         if: runner.os == 'Windows'
         shell: powershell
-        run: .\scripts\setup.ps1 -SinAsistente
+        run: |
+          $env:ECOMDROP_SIN_ASISTENTE = '1'; $env:ECOMDROP_KIT = "$PWD"
+          iex ([IO.File]::ReadAllText("$PWD\scripts\setup.ps1", [Text.Encoding]::UTF8))
+          exit $global:ECOMDROP_CODIGO
 
       # Los pasos de Actions no recargan el PATH del perfil: se publica para los siguientes.
       - name: PATH de las herramientas instaladas
@@ -141,7 +144,10 @@ jobs:
       - name: Segunda pasada (Windows)
         if: runner.os == 'Windows'
         shell: powershell
-        run: .\scripts\setup.ps1 -SinAsistente
+        run: |
+          $env:ECOMDROP_SIN_ASISTENTE = '1'; $env:ECOMDROP_KIT = "$PWD"
+          iex ([IO.File]::ReadAllText("$PWD\scripts\setup.ps1", [Text.Encoding]::UTF8))
+          exit $global:ECOMDROP_CODIGO
 
       # ── 4. doctor sobre el proyecto de ejemplo (Node + Python) ──
       - name: Doctor en examples/proyecto-demo

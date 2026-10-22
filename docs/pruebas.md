@@ -24,8 +24,9 @@ Lanzar desde la copia local:
 ECOMDROP_SIE_TARBALL="$PWD/dist/sie.tar.gz" bash scripts/setup.sh
 ```
 ```powershell
-# Windows, en PowerShell, desde la carpeta del kit
-$env:ECOMDROP_SIE_TARBALL = "$PWD\dist\sie.tar.gz"; .\scripts\setup.ps1
+# Windows, en PowerShell, desde la carpeta del kit (igual que «irm | iex», sin depender de la política de scripts)
+$env:ECOMDROP_SIE_TARBALL = "$PWD\dist\sie.tar.gz"; $env:ECOMDROP_KIT = "$PWD"
+iex ([IO.File]::ReadAllText("$PWD\scripts\setup.ps1", [Text.Encoding]::UTF8))
 ```
 
 Para probar la descarga real del SIE con acceso por GitHub: crea una **cuenta de GitHub de prueba**, invítala al equipo

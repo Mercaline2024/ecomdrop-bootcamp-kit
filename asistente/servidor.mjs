@@ -96,12 +96,16 @@ function lanzarPaso(id, extraEnv = {}) {
   if (DEMO) return lanzarDemo(id);
   const e = { estado: 'corriendo', lineas: [], clientes: new Set(), codigo: null, hijo: null };
   ejecuciones.set(id, e);
+  // Windows: el script se lee como UTF-8 y se ejecuta con iex (igual que «irm | iex»), así no depende de la
+  // codificación del archivo; el paso y la ruta del kit van por variables de entorno.
+  const ps1 = path.join(KIT, 'scripts', 'setup.ps1').replace(/'/g, "''");
   const [cmd, cmdArgs] = ES_WIN
-    ? ['powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(KIT, 'scripts', 'setup.ps1'), '-Paso', id]]
+    ? ['powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command',
+      `[Console]::OutputEncoding=[Text.Encoding]::UTF8; iex ([IO.File]::ReadAllText('${ps1}', [Text.Encoding]::UTF8)); exit $global:ECOMDROP_CODIGO`]]
     : ['bash', [path.join(KIT, 'scripts', 'setup.sh'), '--paso', id]];
   const hijo = spawn(cmd, cmdArgs, {
     cwd: KIT,
-    env: { ...process.env, ...leerEnv(ENV_GLOBAL), ...extraEnv, ECOMDROP_DESDE_ASISTENTE: '1', NO_COLOR: '1' },
+    env: { ...process.env, ...leerEnv(ENV_GLOBAL), ...extraEnv, ECOMDROP_DESDE_ASISTENTE: '1', NO_COLOR: '1', ECOMDROP_PASO: id, ECOMDROP_KIT: KIT },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   e.hijo = hijo;

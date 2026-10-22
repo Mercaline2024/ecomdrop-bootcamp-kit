@@ -1,16 +1,21 @@
-﻿# Ecomdrop Bootcamp Kit — instalador para Windows 10/11 (PowerShell 5.1 o 7).
+# Ecomdrop Bootcamp Kit — instalador para Windows 10/11 (PowerShell 5.1 o 7).
 #
 #   irm https://raw.githubusercontent.com/Mercaline2024/ecomdrop-bootcamp-kit/main/scripts/setup.ps1 | iex
 #
-# Opciones (al ejecutarlo como archivo):  -SinAsistente   -Paso <id>
-#   o con variables de entorno:            $env:ECOMDROP_SIN_ASISTENTE=1   $env:ECOMDROP_PASO='<id>'
+# Opciones (variables de entorno, antes del comando):  $env:ECOMDROP_SIN_ASISTENTE=1   $env:ECOMDROP_PASO='<id>'
+#   Desde una copia local del kit:  $env:ECOMDROP_KIT="$PWD"; iex ([IO.File]::ReadAllText("$PWD\scripts\setup.ps1"))
+#   (como archivo también acepta -SinAsistente y -Paso <id>)
 # Pasos: base node python gh claude media modelo shopify acceso sie playwright config doctor limpieza
 #
 # Variables: ECOMDROP_KIT_URL, ECOMDROP_SIE_REPO, ECOMDROP_SIE_TARBALL, ECOMDROP_SALTAR_MODELO=1, GH_TOKEN
 # Es idempotente: lo que ya está instalado se salta. Log en %USERPROFILE%\.ecomdrop\logs\.
 # No hace falta abrirlo como administrador: Windows mostrará el aviso de UAC solo cuando un instalador lo necesite.
 
-$ErrorActionPreference = 'Stop'
+# 'Continue' y no 'Stop': en PowerShell 5.1, con 'Stop', cualquier texto que un programa escriba en stderr
+# (git, fnm, winget lo hacen aunque todo vaya bien) detendría el instalador. Los errores se comprueban a mano
+# con $LASTEXITCODE (función Correr) y con -ErrorAction Stop en los cmdlets que importan.
+$ErrorActionPreference = 'Continue'
+$global:ECOMDROP_CODIGO = 0
 $ProgressPreference = 'SilentlyContinue'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -45,12 +50,14 @@ function Titulo($t) { Write-Host ""; Write-Host "━━ $t" -ForegroundColor Cya
 function Info($t)   { Write-Host "  → $t" -ForegroundColor Gray }
 function Ok($t)     { Write-Host "  ✔ $t" -ForegroundColor Green }
 function Aviso($t)  { Write-Host "  ! $t" -ForegroundColor Yellow }
+# Nunca se usa «exit»: con «irm … | iex» cerraría la ventana de PowerShell del estudiante.
+# Fallo muestra el error y lanza una excepción marcada que el bloque principal recoge.
 function Fallo($t) {
   Write-Host ""; Write-Host "  ✖ $t" -ForegroundColor Red
   Write-Host "  Log completo: $Log"
   Write-Host "  Si no sabes cómo seguir, envía ese archivo a soporte del bootcamp."; Write-Host ""
-  try { Stop-Transcript | Out-Null } catch {}
-  exit 1
+  $global:ECOMDROP_CODIGO = 1
+  throw 'ECOMDROP_FALLO'
 }
 function Tiene($c) { [bool](Get-Command $c -ErrorAction SilentlyContinue) }
 
@@ -67,7 +74,8 @@ function Recargar-Path {
   $env:Path = "$LocalBin;$(Join-Path $Inicio '.fnm');$WhisperDir;$maquina;$usuario"
   if (Tiene fnm) {
     fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression
-    fnm use --silent-if-unchanged lts-latest 2>$null | Out-Null
+    # solo se activa si Node LTS ya está instalado (si no, fnm avisa por stderr)
+    if ((fnm list 2>&1 | Out-String) -match 'lts-latest') { fnm use --silent-if-unchanged lts-latest *> $null }
   }
   $envFile = Join-Path $EcomdropHome '.env'
   if (Test-Path $envFile) {
@@ -100,6 +108,7 @@ function Winget-Instalar([string]$id, [string]$nombre, [string]$motivoAdmin = ''
 
 # ───────────────────────── kit ─────────────────────────
 function Ubicar-Kit {
+  if ($env:ECOMDROP_KIT -and (Test-Path (Join-Path $env:ECOMDROP_KIT 'asistente\servidor.mjs'))) { return $env:ECOMDROP_KIT }
   if ($PSCommandPath) {
     $aqui = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
     if (Test-Path (Join-Path $aqui 'asistente\servidor.mjs')) { return $aqui }
@@ -107,9 +116,9 @@ function Ubicar-Kit {
   $kit = Join-Path $EcomdropHome 'kit'
   if (-not (Test-Path (Join-Path $kit 'asistente\servidor.mjs'))) {
     Info 'Descargando el kit…'
-    New-Item -ItemType Directory -Force -Path $kit | Out-Null
+    New-Item -ItemType Directory -Force -Path $kit -ErrorAction Stop | Out-Null
     $tgz = Join-Path $env:TEMP 'ecomdrop-kit.tar.gz'
-    try { Invoke-WebRequest -UseBasicParsing -Uri $KitUrl -OutFile $tgz } catch { Fallo "No se pudo descargar el kit desde $KitUrl. Revisa tu conexión." }
+    try { Invoke-WebRequest -UseBasicParsing -Uri $KitUrl -OutFile $tgz -ErrorAction Stop } catch { Fallo "No se pudo descargar el kit desde $KitUrl. Revisa tu conexión." }
     Correr 'No se pudo descomprimir el kit' { tar -xzf $tgz -C $kit --strip-components=1 }
     Remove-Item $tgz -Force
   }
@@ -164,7 +173,7 @@ function Python-Comando {
 function Asegurar-Python3([string]$exe) {
   if (Tiene python3) { & python3 -c 'import sys' 2>$null; if ($LASTEXITCODE -eq 0) { return } }
   $destino = Join-Path (Split-Path $exe) 'python3.exe'
-  if (-not (Test-Path $destino)) { Copy-Item $exe $destino; Info "Creado python3.exe junto a $exe" }
+  if (-not (Test-Path $destino)) { Copy-Item $exe $destino -ErrorAction Stop; Info "Creado python3.exe junto a $exe" }
   Agregar-PathUsuario (Split-Path $exe)
 }
 
@@ -184,7 +193,7 @@ function Paso-python {
   Titulo 'Python (uv)'
   if (-not (Tiene uv)) {
     Info 'Instalando uv…'
-    try { Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression } catch { Fallo "No se pudo instalar uv: $($_.Exception.Message)" }
+    try { Invoke-RestMethod https://astral.sh/uv/install.ps1 -ErrorAction Stop | Invoke-Expression } catch { Fallo "No se pudo instalar uv: $($_.Exception.Message)" }
     Agregar-PathUsuario $LocalBin
   }
   Ok "uv $((uv --version) -replace 'uv ','')"
@@ -210,7 +219,7 @@ function Paso-claude {
   Titulo 'Claude Code'
   if (Tiene claude) { Ok "Claude Code $((claude --version) -split ' ' | Select-Object -First 1) ya instalado"; return }
   Info 'Instalando Claude Code con el instalador nativo oficial…'
-  try { Invoke-RestMethod https://claude.ai/install.ps1 | Invoke-Expression } catch { Fallo "El instalador de Claude Code falló: $($_.Exception.Message)" }
+  try { Invoke-RestMethod https://claude.ai/install.ps1 -ErrorAction Stop | Invoke-Expression } catch { Fallo "El instalador de Claude Code falló: $($_.Exception.Message)" }
   Agregar-PathUsuario $LocalBin
   if (-not (Tiene claude)) { Fallo "Claude Code se instaló pero no aparece en el PATH ($LocalBin)." }
   Ok "Claude Code $((claude --version) -split ' ' | Select-Object -First 1)"
@@ -226,19 +235,19 @@ function Paso-media {
   $asset = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'whisper-bin-win-cpu-arm64.zip' } else { 'whisper-bin-x64.zip' }
   $cab = @{ 'User-Agent' = 'ecomdrop-bootcamp-kit' }
   if ($env:GITHUB_TOKEN) { $cab['Authorization'] = "Bearer $env:GITHUB_TOKEN" }  # en CI evita el límite de la API
-  $rels = Invoke-RestMethod -UseBasicParsing -Headers $cab 'https://api.github.com/repos/ggml-org/whisper.cpp/releases?per_page=20'
+  $rels = Invoke-RestMethod -UseBasicParsing -Headers $cab 'https://api.github.com/repos/ggml-org/whisper.cpp/releases?per_page=20' -ErrorAction Stop
   $url = ($rels | ForEach-Object { $_.assets } | Where-Object { $_.name -eq $asset } | Select-Object -First 1).browser_download_url
   if (-not $url) { Fallo "No encontré $asset en los releases de whisper.cpp." }
   $zip = Join-Path $env:TEMP $asset
-  Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip
+  Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $zip -ErrorAction Stop
   $tmp = Join-Path $env:TEMP 'whisper-cpp'
   Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
-  Expand-Archive -Path $zip -DestinationPath $tmp -Force
+  Expand-Archive -Path $zip -DestinationPath $tmp -Force -ErrorAction Stop
   $exe = Get-ChildItem $tmp -Recurse -Filter 'whisper-cli.exe' | Select-Object -First 1
   if (-not $exe) { Fallo 'El zip de whisper.cpp no trae whisper-cli.exe.' }
   Remove-Item $WhisperDir -Recurse -Force -ErrorAction SilentlyContinue
-  New-Item -ItemType Directory -Force -Path $WhisperDir | Out-Null
-  Copy-Item (Join-Path $exe.DirectoryName '*') $WhisperDir -Recurse -Force   # el exe necesita sus DLL al lado
+  New-Item -ItemType Directory -Force -Path $WhisperDir -ErrorAction Stop | Out-Null
+  Copy-Item (Join-Path $exe.DirectoryName '*') $WhisperDir -Recurse -Force -ErrorAction Stop   # el exe necesita sus DLL al lado
   Remove-Item $zip, $tmp -Recurse -Force
   Agregar-PathUsuario $WhisperDir
   Ok "whisper-cli instalado en $WhisperDir"
@@ -253,7 +262,7 @@ function Paso-modelo {
   New-Item -ItemType Directory -Force -Path (Split-Path $Modelo) | Out-Null
   Info 'Descargando ~1,6 GB (si se corta, vuelve a ejecutar este paso: continúa donde quedó)…'
   Correr 'La descarga del modelo falló. Vuelve a intentarlo.' { curl.exe -fL --retry 5 --retry-delay 3 -C - -o "$Modelo.part" $ModeloUrl }
-  Move-Item "$Modelo.part" $Modelo -Force
+  Move-Item "$Modelo.part" $Modelo -Force -ErrorAction Stop
   Ok "Modelo descargado en $Modelo"
 }
 
@@ -286,7 +295,7 @@ function Marcar-Instalacion {
   $id = ([guid]::NewGuid().ToString('N')).Substring(0, 16)
   $fecha = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
   @{ id = $id; github = $usuario; fecha = $fecha; licencia = 'uso personal e intransferible — Ecomdrop Bootcamp' } |
-    ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $SieDir '.instalacion.json')
+    ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $SieDir '.instalacion.json') -ErrorAction Stop
   Get-ChildItem $SieDir -Recurse -Include 'SKILL.md', 'CLAUDE.md', 'PLAYBOOK.md' | ForEach-Object {
     [IO.File]::AppendAllText($_.FullName, "`n<!-- SIE · licencia de uso personal e intransferible · instalación $id · $usuario -->`n")
   }
@@ -296,7 +305,7 @@ function Paso-sie {
   Titulo 'Instalar el SIE'
   $tmp = Join-Path $EcomdropHome 'tmp\sie'
   Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
-  New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+  New-Item -ItemType Directory -Force -Path $tmp -ErrorAction Stop | Out-Null
   $paquete = $env:ECOMDROP_SIE_TARBALL
   if (-not $paquete) {
     Paso-acceso
@@ -311,14 +320,14 @@ function Paso-sie {
   Correr 'No se pudo descomprimir el SIE' { tar --no-same-owner -xzf $paquete -C $tmp --exclude 'sie/sie' --exclude 'sie/.claude/skills/*' }
   $nuevo = Join-Path $tmp 'sie'
   New-Item -ItemType Directory -Force -Path (Join-Path $nuevo '.claude\skills') | Out-Null
-  Get-ChildItem (Join-Path $nuevo 'skills') -Directory | ForEach-Object { Copy-Item $_.FullName (Join-Path $nuevo ".claude\skills\$($_.Name)") -Recurse -Force }
+  Get-ChildItem (Join-Path $nuevo 'skills') -Directory | ForEach-Object { Copy-Item $_.FullName (Join-Path $nuevo ".claude\skills\$($_.Name)") -Recurse -Force -ErrorAction Stop }
   New-Item -ItemType Directory -Force -Path $Proyectos | Out-Null
   if (Test-Path $SieDir) {
-    if (Test-Path (Join-Path $SieDir 'node_modules')) { Move-Item (Join-Path $SieDir 'node_modules') $nuevo -Force }
-    if (Test-Path (Join-Path $SieDir '.env')) { Copy-Item (Join-Path $SieDir '.env') $nuevo -Force }
-    Remove-Item $SieDir -Recurse -Force
+    if (Test-Path (Join-Path $SieDir 'node_modules')) { Move-Item (Join-Path $SieDir 'node_modules') $nuevo -Force -ErrorAction Stop }
+    if (Test-Path (Join-Path $SieDir '.env')) { Copy-Item (Join-Path $SieDir '.env') $nuevo -Force -ErrorAction Stop }
+    Remove-Item $SieDir -Recurse -Force -ErrorAction Stop
   }
-  Move-Item $nuevo $SieDir
+  Move-Item $nuevo $SieDir -ErrorAction Stop
   Marcar-Instalacion
   Push-Location $SieDir
   # repo git local sin remoto: nueva-tienda.sh lo usa como submódulo de cada tienda
@@ -352,9 +361,9 @@ function Paso-config {
   if (Test-Path (Join-Path $Kit 'doctor')) {
     $destino = Join-Path $EcomdropHome 'doctor'
     Remove-Item $destino -Recurse -Force -ErrorAction SilentlyContinue
-    Copy-Item (Join-Path $Kit 'doctor') $destino -Recurse
+    Copy-Item (Join-Path $Kit 'doctor') $destino -Recurse -ErrorAction Stop
     New-Item -ItemType Directory -Force -Path $LocalBin | Out-Null
-    Set-Content -Encoding ASCII (Join-Path $LocalBin 'ecomdrop-doctor.cmd') "@echo off`r`nnode `"$destino\bin\ecomdrop-doctor.mjs`" %*"
+    Set-Content -Encoding ASCII -ErrorAction Stop (Join-Path $LocalBin 'ecomdrop-doctor.cmd') "@echo off`r`nnode `"$destino\bin\ecomdrop-doctor.mjs`" %*" -ErrorAction Stop
     Agregar-PathUsuario $LocalBin
     Ok 'Comando ecomdrop-doctor disponible'
   }
@@ -383,21 +392,20 @@ function Paso-limpieza {
 }
 
 # ───────────────────────── principal ─────────────────────────
-Recargar-Path
-$Kit = Ubicar-Kit
-
-function Terminar([int]$codigo = 0) {
+function Cerrar-Log {
   try { Stop-Transcript | Out-Null } catch {}
   if ($script:BorrarLog) { Remove-Item $Log -Force -ErrorAction SilentlyContinue }
-  exit $codigo
 }
 
-try {
+function Principal {
+  Recargar-Path
+  $script:Kit = Ubicar-Kit
+
   if ($Paso) {
     $f = Get-Command "Paso-$Paso" -ErrorAction SilentlyContinue
     if (-not $f) { Fallo "Paso desconocido: $Paso" }
     & $f
-    Terminar 0
+    return
   }
 
   Write-Host ""; Write-Host "Ecomdrop Bootcamp · Instalador  (Windows $([Environment]::OSVersion.Version), $env:PROCESSOR_ARCHITECTURE)" -ForegroundColor White
@@ -409,7 +417,8 @@ try {
     Titulo 'Asistente de instalación'
     Info 'Se abrirá tu navegador. Sigue las pestañas en orden; esta ventana debe quedar abierta.'
     node (Join-Path $Kit 'asistente\servidor.mjs')
-    Terminar $LASTEXITCODE
+    $global:ECOMDROP_CODIGO = $LASTEXITCODE
+    return
   }
 
   foreach ($p in 'python', 'gh', 'claude', 'media', 'modelo', 'shopify', 'sie', 'playwright', 'config', 'doctor') {
@@ -421,7 +430,19 @@ try {
     & (Get-Command "Paso-$p")
   }
   Write-Host ""; Write-Host '✔ Instalación terminada. Abre una PowerShell nueva para que se carguen node, uv y claude.' -ForegroundColor Green
-  Terminar 0
-} catch {
-  Fallo "Error inesperado: $($_.Exception.Message) (línea $($_.InvocationInfo.ScriptLineNumber))"
 }
+
+try {
+  Principal
+} catch {
+  if ("$_" -ne 'ECOMDROP_FALLO') {
+    $global:ECOMDROP_CODIGO = 1
+    Write-Host ""; Write-Host "  ✖ Error inesperado: $($_.Exception.Message) (línea $($_.InvocationInfo.ScriptLineNumber))" -ForegroundColor Red
+    Write-Host "  Log completo: $Log"
+    Write-Host "  Envía ese archivo a soporte del bootcamp."; Write-Host ""
+  }
+} finally {
+  Cerrar-Log
+}
+# Solo al ejecutarlo como archivo (-File): ahí «exit» termina el script, no la ventana.
+if ($PSCommandPath) { exit $global:ECOMDROP_CODIGO }
