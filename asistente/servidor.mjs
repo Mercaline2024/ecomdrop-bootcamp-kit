@@ -420,7 +420,9 @@ servidor.on('error', (err) => {
 });
 
 servidor.listen(PUERTO, '127.0.0.1', () => {
-  const enlace = `http://127.0.0.1:${PUERTO}/?t=${TOKEN}`;
+  // --seccion claves|conectores|tienda abre directamente esa pestaña (lo usa la skill /ecomdrop-bootcamp:instalar)
+  const seccion = valorArg('--seccion');
+  const enlace = `http://127.0.0.1:${PUERTO}/?t=${TOKEN}${seccion && /^[a-z]+$/.test(seccion) ? `#${seccion}` : ''}`;
   if (DEMO) console.log('\n  MODO DEMOSTRACIÓN: los pasos se simulan; no se instala ni se borra nada.');
   console.log(`\n  Asistente de instalación listo:\n  ${enlace}\n\n  (Deja esta ventana abierta; Ctrl+C para cerrar el asistente.)\n`);
   if (!args.includes('--no-abrir')) {

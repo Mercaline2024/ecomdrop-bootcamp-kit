@@ -3,10 +3,14 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/Mercaline2024/ecomdrop-bootcamp-kit/main/scripts/setup.sh | bash
 #
-# Opciones:
-#   --sin-asistente   todo en la terminal, sin abrir el asistente web (CI o quien lo prefiera)
-#   --paso <id>       ejecuta un solo paso (lo usa el asistente web): base node python gh claude media
-#                     modelo shopify acceso sie playwright config doctor limpieza
+# Modos:
+#   (por defecto)     MÍNIMO: lo que necesita permisos de administrador + Node + Claude Code + la configuración del
+#                     kit. Luego abre Claude: el estudiante escribe /ecomdrop-bootcamp:instalar y Claude instala el
+#                     resto con los mismos pasos (ecomdrop-paso <id>), resolviendo lo particular de cada equipo.
+#   --completo        todo en la terminal, sin Claude ni navegador (CI o quien lo prefiera). Alias: --sin-asistente
+#   --asistente       todo desde el asistente web con Chriss
+#   --paso <id>       un solo paso: base node deps python gh claude media modelo shopify acceso sie playwright
+#                     config doctor limpieza
 #
 # Variables útiles:
 #   ECOMDROP_KIT_URL       tarball del kit (por defecto, la rama main en GitHub)
@@ -28,16 +32,17 @@ MODELO_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large
 MODELO="${WHISPER_MODEL:-$HOME/whisper-models/ggml-large-v3-turbo.bin}"
 LOCAL_BIN="$HOME/.local/bin"
 
-PASO=""; SIN_ASISTENTE=0
+PASO=""; MODO="${ECOMDROP_MODO:-minimo}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --paso) PASO="${2:-}"; shift 2 ;;
-    --sin-asistente) SIN_ASISTENTE=1; shift ;;
+    --completo|--sin-asistente) MODO=completo; shift ;;
+    --asistente) MODO=asistente; shift ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "Opción desconocida: $1"; exit 2 ;;
   esac
 done
-[ -n "${CI:-}" ] && SIN_ASISTENTE=1
+[ -n "${CI:-}" ] && MODO=completo
 
 # ───────────────────────── salida y log ─────────────────────────
 mkdir -p "$ECOMDROP_HOME/logs"
@@ -187,6 +192,15 @@ paso_node(){
   eval "$(fnm env --shell bash)"
   fnm use lts-latest >/dev/null
   ok "node $(node --version) · npm $(npm --version)"
+}
+
+# Linux: lo que necesita sudo se hace aquí, en la terminal, porque Claude no puede escribir contraseñas.
+paso_deps(){
+  [ "$PLATAFORMA" = linux ] || return 0
+  titulo "Librerías del sistema para el navegador de pruebas"
+  pedir_admin "Chromium (validar landings) necesita librerías del sistema que se instalan con apt."
+  $SUDO env "PATH=$PATH" npx -y playwright install-deps chromium >/dev/null || fallo "No se pudieron instalar las librerías de Chromium."
+  ok "Librerías de Chromium instaladas"
 }
 
 paso_python(){
@@ -379,6 +393,11 @@ paso_config(){
     chmod +x "$LOCAL_BIN/ecomdrop-doctor"
     ok "Comando ecomdrop-doctor disponible"
   fi
+  # comandos que usa Claude (skill /ecomdrop-bootcamp:instalar) para ejecutar los pasos probados del kit
+  printf '#!/usr/bin/env bash\n# Ejecuta un paso del instalador del kit: ecomdrop-paso <id>\nexec bash "%s/scripts/setup.sh" --paso "$@"\n' "$KIT" > "$LOCAL_BIN/ecomdrop-paso"
+  printf '#!/usr/bin/env bash\n# Abre el asistente web (claves, conectores, tienda): ecomdrop-asistente [--seccion claves]\nexec node "%s/asistente/servidor.mjs" "$@"\n' "$KIT" > "$LOCAL_BIN/ecomdrop-asistente"
+  chmod +x "$LOCAL_BIN/ecomdrop-paso" "$LOCAL_BIN/ecomdrop-asistente"
+  ok "Comandos ecomdrop-paso y ecomdrop-asistente disponibles"
 }
 
 paso_doctor(){
@@ -395,8 +414,7 @@ paso_doctor(){
 # Borra lo que dejó el instalador. Conserva: el SIE, las tiendas, ~/.ecomdrop/.env, ~/.claude y el doctor.
 paso_limpieza(){
   titulo "Limpieza del instalador"
-  if [ "$KIT" = "$ECOMDROP_HOME/kit" ]; then rm -rf "$ECOMDROP_HOME/kit"; ok "Archivos del instalador borrados"
-  else aviso "El kit está en $KIT (copia de desarrollo): no se borra."; fi
+  # el kit se conserva: lo usan ecomdrop-paso y ecomdrop-asistente (y su código ya es público)
   rm -rf "$ECOMDROP_HOME/src" "$ECOMDROP_HOME/tmp"
   find "$ECOMDROP_HOME/logs" -type f ! -name "$(basename "$LOG")" -delete 2>/dev/null || true
   ok "Descargas temporales y logs anteriores borrados"
@@ -414,15 +432,30 @@ if [ -n "$PASO" ]; then
   exit 0
 fi
 
-printf "\n%sEcomdrop Bootcamp · Instalador%s  (%s %s)\n" "$C_NEGRITA" "$C_FIN" "$OS" "$ARCH"
+printf "\n%sEcomdrop Bootcamp · Instalador%s  (%s %s · modo %s)\n" "$C_NEGRITA" "$C_FIN" "$OS" "$ARCH" "$MODO"
 printf "Log: %s\n" "$LOG"
 paso_base
 paso_node
 
-if [ "$SIN_ASISTENTE" -eq 0 ] && [ -e /dev/tty ]; then
+if [ "$MODO" = asistente ] && [ -e /dev/tty ]; then
   titulo "Asistente de instalación"
   info "Se abrirá tu navegador. Sigue las pestañas en orden; esta ventana debe quedar abierta."
   exec node "$KIT/asistente/servidor.mjs"
+fi
+
+if [ "$MODO" = minimo ]; then
+  paso_deps
+  paso_claude
+  paso_config
+  printf "\n%s✔ Listo lo básico.%s Ahora Claude instala el resto contigo:\n\n" "$C_VERDE$C_NEGRITA" "$C_FIN"
+  printf "   1. Inicia sesión con tu cuenta de claude.ai (Pro o Max) cuando Claude lo pida.\n"
+  printf "   2. Escribe:  %s/ecomdrop-bootcamp:instalar%s\n\n" "$C_NEGRITA" "$C_FIN"
+  printf "   Si cierras esta ventana: abre una terminal nueva, escribe  claude  y sigue desde el paso 2.\n\n"
+  if [ -e /dev/tty ] && [ -z "${CI:-}" ]; then
+    cd "$HOME"
+    exec claude </dev/tty >/dev/tty 2>&1
+  fi
+  exit 0
 fi
 
 for p in python gh claude media modelo shopify sie playwright config doctor; do

@@ -2,7 +2,9 @@
 #
 #   irm https://raw.githubusercontent.com/Mercaline2024/ecomdrop-bootcamp-kit/main/scripts/setup.ps1 | iex
 #
-# Opciones (variables de entorno, antes del comando):  $env:ECOMDROP_SIN_ASISTENTE=1   $env:ECOMDROP_PASO='<id>'
+# Modos ($env:ECOMDROP_MODO): minimo (por defecto: lo básico + Claude Code; luego /ecomdrop-bootcamp:instalar),
+#   completo (todo en la terminal; también $env:ECOMDROP_SIN_ASISTENTE=1) y asistente (asistente web con Chriss).
+# Un solo paso: $env:ECOMDROP_PASO='<id>'  (o el comando ecomdrop-paso <id> después de instalar)
 #   Desde una copia local del kit:  $env:ECOMDROP_KIT="$PWD"; iex ([IO.File]::ReadAllText("$PWD\scripts\setup.ps1"))
 #   (como archivo también acepta -SinAsistente y -Paso <id>)
 # Pasos: base node python gh claude media modelo shopify acceso sie playwright config doctor limpieza
@@ -22,11 +24,13 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
 # ───────────────────────── opciones ─────────────────────────
 $Paso = $env:ECOMDROP_PASO
-$SinAsistente = [bool]$env:ECOMDROP_SIN_ASISTENTE -or [bool]$env:CI
+$Modo = if ($env:ECOMDROP_MODO) { $env:ECOMDROP_MODO } else { 'minimo' }
+if ($env:ECOMDROP_SIN_ASISTENTE -or $env:CI) { $Modo = 'completo' }
 for ($i = 0; $i -lt $args.Count; $i++) {
   switch -Regex ($args[$i]) {
     '^-Paso$'         { $Paso = $args[$i + 1]; $i++ }
-    '^-SinAsistente$' { $SinAsistente = $true }
+    '^-(SinAsistente|Completo)$' { $Modo = 'completo' }
+    '^-Asistente$'    { $Modo = 'asistente' }
   }
 }
 
@@ -391,15 +395,32 @@ function Paso-config {
   Titulo 'Configurar Claude Code'
   if (-not (Tiene claude)) { Paso-claude }
   Correr 'No se pudo configurar Claude Code' { node (Join-Path $Kit 'scripts\configurar-claude.mjs') --kit $Kit --sie $SieDir --env (Join-Path $EcomdropHome '.env') }
+  New-Item -ItemType Directory -Force -Path $LocalBin -ErrorAction Stop | Out-Null
   if (Test-Path (Join-Path $Kit 'doctor')) {
     $destino = Join-Path $EcomdropHome 'doctor'
     Remove-Item $destino -Recurse -Force -ErrorAction SilentlyContinue
     Copy-Item (Join-Path $Kit 'doctor') $destino -Recurse -ErrorAction Stop
-    New-Item -ItemType Directory -Force -Path $LocalBin | Out-Null
-    Set-Content -Encoding ASCII -ErrorAction Stop (Join-Path $LocalBin 'ecomdrop-doctor.cmd') "@echo off`r`nnode `"$destino\bin\ecomdrop-doctor.mjs`" %*" -ErrorAction Stop
-    Agregar-PathUsuario $LocalBin
-    Ok 'Comando ecomdrop-doctor disponible'
   }
+  # Cada comando va en dos versiones: .cmd (PowerShell y cmd) y sin extensión (Git Bash, que es la terminal de Claude).
+  $doctorJs = (Join-Path $EcomdropHome 'doctor\bin\ecomdrop-doctor.mjs')
+  $servidorJs = (Join-Path $Kit 'asistente\servidor.mjs')
+  $ps1 = (Join-Path $Kit 'scripts\setup.ps1')
+  $iex = "[Console]::OutputEncoding=[Text.Encoding]::UTF8; iex ([IO.File]::ReadAllText('$($ps1 -replace "'", "''")', [Text.Encoding]::UTF8)); exit `$global:ECOMDROP_CODIGO"
+  $comandos = @{
+    'ecomdrop-doctor'    = @{ cmd = "@echo off`r`nnode `"$doctorJs`" %*";  sh = "exec node '$($doctorJs -replace '\\', '/')' `"`$@`"" }
+    'ecomdrop-asistente' = @{ cmd = "@echo off`r`nnode `"$servidorJs`" %*"; sh = "exec node '$($servidorJs -replace '\\', '/')' `"`$@`"" }
+    'ecomdrop-paso'      = @{
+      cmd = "@echo off`r`nset ECOMDROP_PASO=%1`r`nset ECOMDROP_KIT=$Kit`r`npowershell -NoProfile -ExecutionPolicy Bypass -Command `"$iex`""
+      sh  = "ECOMDROP_PASO=`"`$1`" ECOMDROP_KIT='$Kit' exec powershell.exe -NoProfile -ExecutionPolicy Bypass -Command `"$($iex -replace '\$', '\$')`""
+    }
+  }
+  foreach ($n in $comandos.Keys) {
+    Set-Content -Encoding ASCII -ErrorAction Stop -Path (Join-Path $LocalBin "$n.cmd") -Value $comandos[$n].cmd
+    # Git Bash necesita saltos de línea LF
+    [IO.File]::WriteAllText((Join-Path $LocalBin $n), "#!/usr/bin/env bash`n$($comandos[$n].sh)`n")
+  }
+  Agregar-PathUsuario $LocalBin
+  Ok 'Comandos ecomdrop-doctor, ecomdrop-paso y ecomdrop-asistente disponibles'
 }
 
 function Paso-doctor {
@@ -416,8 +437,7 @@ function Paso-doctor {
 
 function Paso-limpieza {
   Titulo 'Limpieza del instalador'
-  if ($Kit -eq (Join-Path $EcomdropHome 'kit')) { Remove-Item $Kit -Recurse -Force -ErrorAction SilentlyContinue; Ok 'Archivos del instalador borrados' }
-  else { Aviso "El kit está en $Kit (copia de desarrollo): no se borra." }
+  # el kit se conserva: lo usan ecomdrop-paso y ecomdrop-asistente (y su código ya es público)
   foreach ($d in 'src', 'tmp') { Remove-Item (Join-Path $EcomdropHome $d) -Recurse -Force -ErrorAction SilentlyContinue }
   Get-ChildItem (Join-Path $EcomdropHome 'logs') -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -ne $Log } | Remove-Item -Force
   Ok 'Descargas temporales y logs anteriores borrados'
@@ -447,11 +467,29 @@ function Principal {
   Paso-base
   Paso-node
 
-  if (-not $SinAsistente) {
+  if ($Modo -eq 'asistente') {
     Titulo 'Asistente de instalación'
     Info 'Se abrirá tu navegador. Sigue las pestañas en orden; esta ventana debe quedar abierta.'
     node (Join-Path $Kit 'asistente\servidor.mjs')
     $global:ECOMDROP_CODIGO = $LASTEXITCODE
+    return
+  }
+
+  if ($Modo -eq 'minimo') {
+    Paso-claude
+    Paso-config
+    Write-Host ""; Write-Host '✔ Listo lo básico. Ahora Claude instala el resto contigo:' -ForegroundColor Green
+    Write-Host ""
+    Write-Host '   1. Inicia sesión con tu cuenta de claude.ai (Pro o Max) cuando Claude lo pida.'
+    Write-Host '   2. Escribe:  /ecomdrop-bootcamp:instalar' -ForegroundColor White
+    Write-Host ""
+    Write-Host '   Si cierras esta ventana: abre una PowerShell nueva, escribe  claude  y sigue desde el paso 2.'
+    Write-Host ""
+    if (-not $env:CI) {
+      Cerrar-Log
+      Set-Location $Inicio
+      claude
+    }
     return
   }
 

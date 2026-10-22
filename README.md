@@ -54,19 +54,30 @@ irm https://raw.githubusercontent.com/Mercaline2024/ecomdrop-bootcamp-kit/main/s
 
 ### Qué pasa al ejecutarlo
 
-1. **En la terminal** se instala lo mínimo y lo que necesita permisos de administrador. Antes de pedirlos te dice por qué:
+1. **En la terminal (2–5 min)** se instala solo lo que necesita permisos de administrador, y antes de pedirlos te
+   dice por qué:
    - macOS: Homebrew (te pide la contraseña del Mac; al escribirla no se ve nada, es normal).
-   - Windows: winget y Git for Windows (Windows muestra el aviso de permisos; acéptalo).
+   - Windows: winget y Git for Windows (acepta el aviso de permisos de Windows) y permite los scripts de npm.
    - Linux: los paquetes del sistema con apt.
-   - En los tres: fnm y Node.js LTS.
-2. **Se abre el asistente en tu navegador** (`http://127.0.0.1:4747`). Chriss te guía por seis pasos:
-   **Tu equipo → Herramientas → Claves → Conectores → Tu tienda → Listo**.
-   Deja la terminal abierta mientras lo usas.
-3. Al terminar, el asistente **borra los archivos del instalador**. Se quedan tu SIE, tus tiendas, tus claves y la
-   configuración de Claude Code.
+   - En los tres: Node.js, **Claude Code**, los permisos y la guardia, el plugin del bootcamp y `ecomdrop-doctor`.
+2. **Se abre Claude Code.** Inicia sesión con tu cuenta de claude.ai y escribe:
 
-¿Prefieres todo en la terminal, sin navegador? En macOS y Linux añade `-s -- --sin-asistente` al final
-(`… | bash -s -- --sin-asistente`); en Windows ejecuta antes `$env:ECOMDROP_SIN_ASISTENTE=1`.
+   ```
+   /ecomdrop-bootcamp:instalar
+   ```
+
+   Claude instala el resto contigo —Python, GitHub CLI, ffmpeg y whisper, Shopify CLI, el SIE (te pide iniciar sesión
+   en GitHub con un código) y el navegador de pruebas—, resuelve lo particular de tu equipo y al final abre el
+   asistente con **Chriss** para tus claves, conectores y tu primera tienda.
+3. Claude termina con una revisión de `ecomdrop-doctor` y te dice cómo empezar.
+
+Otras formas, si las prefieres (macOS y Linux: `… | bash -s -- --completo`; Windows: `$env:ECOMDROP_MODO='completo'`
+antes del comando):
+
+| Modo | Qué hace |
+|---|---|
+| `--completo` | Todo en la terminal, sin Claude ni navegador |
+| `--asistente` | Todo desde el asistente web con Chriss, como una instalación guiada clásica |
 
 ### Qué se instala
 
@@ -90,7 +101,7 @@ Todo es **idempotente**: si vuelves a ejecutar el instalador, salta lo que ya es
 
 ## Después de instalar
 
-Abre una **terminal nueva** (para que se carguen las herramientas) y entra a tu tienda:
+Cuando Claude termine `/ecomdrop-bootcamp:instalar`, abre una **terminal nueva** (para que se carguen las herramientas) y entra a tu tienda:
 
 ```bash
 cd ~/proyectos/tiendas/<tu-tienda>
@@ -109,6 +120,9 @@ La skill `nueva-tienda` completa tu `tienda.json` desde los conectores. A partir
 
 | Comando | Qué hace |
 |---|---|
+| `/ecomdrop-bootcamp:instalar` (en Claude) | Termina de preparar tu equipo (si cerraste la ventana o falló algo, vuelve a escribirlo: retoma donde quedó) |
+| `ecomdrop-paso <paso>` | Repite un paso del instalador: `python`, `gh`, `media`, `modelo`, `shopify`, `acceso`, `sie`, `playwright`, `config` |
+| `ecomdrop-asistente` | Abre el asistente web con Chriss (claves, conectores, tienda) |
 | `ecomdrop-doctor` | Revisa el proyecto de la carpeta actual: tabla en consola y reporte en `.ecomdrop/doctor-report.json` |
 | `ecomdrop-doctor --fix` | Instala lo que falta (versión de Node, dependencias, `.env`, Chromium…) |
 | `ecomdrop-doctor --sistema` | Revisa tu equipo completo (SIE, modelo, Claude Code) |

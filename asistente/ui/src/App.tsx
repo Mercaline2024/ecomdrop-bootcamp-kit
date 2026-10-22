@@ -29,7 +29,11 @@ function guardar(clave: string, valor: unknown) {
 export default function App() {
   const [info, setInfo] = React.useState<Info | null>(null)
   const [error, setError] = React.useState(false)
-  const [etapa, setEtapa] = React.useState<Etapa>(() => leerGuardado<Etapa>('ecomdrop-etapa', 'equipo'))
+  const [etapa, setEtapa] = React.useState<Etapa>(() => {
+    // #claves, #conectores… (enlace que da la skill /ecomdrop-bootcamp:instalar) manda sobre lo guardado
+    const hash = location.hash.slice(1) as Etapa
+    return ETAPAS.some((e) => e.id === hash) ? hash : leerGuardado<Etapa>('ecomdrop-etapa', 'equipo')
+  })
   const [completadas, setCompletadas] = React.useState<Set<Etapa>>(() => new Set(leerGuardado<Etapa[]>('ecomdrop-completadas', [])))
   const [mensaje, setMensaje] = React.useState<Mensaje>(BIENVENIDA[etapa])
   const [historial, setHistorial] = React.useState<Turno[]>([])
