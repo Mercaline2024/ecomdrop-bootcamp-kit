@@ -133,14 +133,26 @@ function Ubicar-Kit {
     $aqui = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
     if (Test-Path (Join-Path $aqui 'asistente\servidor.mjs')) { return $aqui }
   }
+  # Con «irm | iex» se baja SIEMPRE la última versión: una copia de un intento anterior puede estar desactualizada.
   $kit = Join-Path $EcomdropHome 'kit'
-  if (-not (Test-Path (Join-Path $kit 'asistente\servidor.mjs'))) {
-    Info 'Descargando el kit…'
-    New-Item -ItemType Directory -Force -Path $kit -ErrorAction Stop | Out-Null
-    $tgz = Join-Path $env:TEMP 'ecomdrop-kit.tar.gz'
-    try { Invoke-WebRequest -UseBasicParsing -Uri $KitUrl -OutFile $tgz -ErrorAction Stop } catch { Fallo "No se pudo descargar el kit desde $KitUrl. Revisa tu conexión." }
-    Correr 'No se pudo descomprimir el kit' { tar -xzf $tgz -C $kit --strip-components=1 }
-    Remove-Item $tgz -Force
+  $nuevo = "$kit.nuevo"
+  $tgz = Join-Path $env:TEMP 'ecomdrop-kit.tar.gz'
+  Info 'Descargando la última versión del kit…'
+  try {
+    Remove-Item $nuevo -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $nuevo -ErrorAction Stop | Out-Null
+    Invoke-WebRequest -UseBasicParsing -Uri $KitUrl -OutFile $tgz -ErrorAction Stop
+    & tar -xzf $tgz -C $nuevo --strip-components=1
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path (Join-Path $nuevo 'asistente\servidor.mjs'))) { throw 'el paquete del kit está incompleto' }
+    Remove-Item $kit -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path $kit) { throw 'la copia anterior está en uso (¿quedó abierto el asistente en otra ventana?)' }
+    Move-Item $nuevo $kit -ErrorAction Stop
+  } catch {
+    Remove-Item $nuevo -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path (Join-Path $kit 'asistente\servidor.mjs')) { Aviso "No se pudo actualizar el kit ($($_.Exception.Message)); se usa la copia anterior." }
+    else { Fallo "No se pudo descargar el kit desde $KitUrl. Revisa tu conexión. ($($_.Exception.Message))" }
+  } finally {
+    Remove-Item $tgz -Force -ErrorAction SilentlyContinue
   }
   return $kit
 }

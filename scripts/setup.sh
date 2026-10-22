@@ -109,11 +109,17 @@ ubicar_kit(){
   local aqui=""
   [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ] && aqui="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
   if [ -n "$aqui" ] && [ -f "$aqui/asistente/servidor.mjs" ]; then KIT="$aqui"; return; fi
+  # Con «curl | bash» se baja SIEMPRE la última versión: una copia de un intento anterior puede estar desactualizada.
   KIT="$ECOMDROP_HOME/kit"
-  if [ ! -f "$KIT/asistente/servidor.mjs" ]; then
-    info "Descargando el kit…"
-    mkdir -p "$KIT"
-    curl -fsSL "$KIT_URL" | tar -xz -C "$KIT" --strip-components=1 || fallo "No se pudo descargar el kit desde $KIT_URL. Revisa tu conexión."
+  local nuevo="$KIT.nuevo"
+  info "Descargando la última versión del kit…"
+  rm -rf "$nuevo"; mkdir -p "$nuevo"
+  if curl -fsSL "$KIT_URL" | tar --no-same-owner -xz -C "$nuevo" --strip-components=1 && [ -f "$nuevo/asistente/servidor.mjs" ]; then
+    rm -rf "$KIT" && mv "$nuevo" "$KIT"
+  else
+    rm -rf "$nuevo"
+    [ -f "$KIT/asistente/servidor.mjs" ] && aviso "No se pudo actualizar el kit; se usa la copia anterior." \
+      || fallo "No se pudo descargar el kit desde $KIT_URL. Revisa tu conexión."
   fi
 }
 
