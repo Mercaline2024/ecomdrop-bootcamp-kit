@@ -1,6 +1,5 @@
 // --fix: aplica los arreglos automáticos de un diagnóstico, en orden, mostrando cada comando.
 // Nunca inventa valores de claves: solo crea las variables vacías para que el estudiante las complete.
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,7 +19,7 @@ const PRIMERO = ['fnm', 'uv', 'git', 'pnpm', 'yarn', 'bun'];
 
 function ejecutar(cmd, args, { cwd, log }) {
   log.comando([cmd, ...args].join(' '));
-  const r = spawnSync(cmd, args, { cwd, stdio: 'inherit', shell: ES_WIN, env: process.env });
+  const r = H.spawnSeguro(cmd, args, { cwd, stdio: 'inherit', env: process.env });
   return !r.error && r.status === 0;
 }
 // Windows PowerShell 5.1 no entiende «&&»: las partes se ejecutan una a una y se para en la primera que falle.

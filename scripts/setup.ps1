@@ -195,7 +195,8 @@ function Paso-node {
 function Python-Comando {
   foreach ($c in 'python3', 'python', 'py') {
     if (-not (Tiene $c)) { continue }
-    $exe = & $c -c 'import sys; print(sys.executable if sys.version_info >= (3, 10) else "")' 2>$null
+    # sin comillas dobles en el código: PowerShell 5.1 las pasa mal a los programas externos
+    $exe = & $c -c 'import sys; print(sys.executable if sys.version_info >= (3, 10) else str())' 2>$null
     if ($LASTEXITCODE -eq 0 -and $exe) { return ($exe | Select-Object -Last 1).Trim() }
   }
   return $null

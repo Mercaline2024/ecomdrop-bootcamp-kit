@@ -129,8 +129,19 @@ function sustituir(valor, faltan) {
   return valor;
 }
 
+// Windows: los .exe se lanzan sin shell, así los argumentos (JSON, rutas con espacios) llegan intactos.
+// Los .cmd/.bat (npm, npx, pnpm, shopify) necesitan cmd.exe; Node no cita los argumentos con shell: true,
+// así que se citan a mano.
+const citarWin = (a) => (/^[\w@%+=:,./\\-]+$/.test(String(a)) ? String(a) : `"${String(a).replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`);
+function spawnSeguro(cmd, args, opciones) {
+  if (process.platform !== 'win32') return spawnSync(cmd, args, opciones);
+  const r = spawnSync(cmd, args, { ...opciones, shell: false });
+  if (!r.error || r.error.code !== 'ENOENT') return r;
+  return spawnSync([cmd, ...args.map(citarWin)].join(' '), [], { ...opciones, shell: true });
+}
+
 function claude(...a) {
-  return spawnSync('claude', a, { encoding: 'utf8', shell: ES_WIN, timeout: 60000 });
+  return spawnSeguro('claude', a, { encoding: 'utf8', timeout: 60000 });
 }
 
 function mcp() {

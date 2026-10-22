@@ -12,8 +12,21 @@ const ES_WIN = PLATAFORMA === 'win';
 const HOME = os.homedir();
 
 /** Ejecuta un comando corto y devuelve su salida (stdout+stderr), o null si no existe / falla al arrancar. */
+// Windows: los .exe se lanzan sin shell, así los argumentos (JSON, rutas con espacios) llegan intactos.
+// Los .cmd/.bat (npm, npx, pnpm, shopify) necesitan cmd.exe; Node no cita los argumentos con shell: true,
+// así que se citan a mano.
+const citarWin = (a) => (/^[\w@%+=:,./\\-]+$/.test(String(a)) ? String(a) : `"${String(a).replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, '$1$1')}"`);
+function spawnSeguro(cmd, args, opciones) {
+  if (process.platform !== 'win32') return spawnSync(cmd, args, opciones);
+  const r = spawnSync(cmd, args, { ...opciones, shell: false });
+  if (!r.error || r.error.code !== 'ENOENT') return r;
+  return spawnSync([cmd, ...args.map(citarWin)].join(' '), [], { ...opciones, shell: true });
+}
+
+export { spawnSeguro };
+
 export function correr(cmd, args = [], { cwd, timeout = 15000 } = {}) {
-  const r = spawnSync(cmd, args, { cwd, timeout, encoding: 'utf8', shell: ES_WIN, windowsHide: true, env: process.env });
+  const r = spawnSeguro(cmd, args, { cwd, timeout, encoding: 'utf8', windowsHide: true, env: process.env });
   if (r.error) return null;
   return { codigo: r.status, salida: `${r.stdout ?? ''}${r.stderr ?? ''}` };
 }

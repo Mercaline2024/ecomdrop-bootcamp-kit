@@ -160,7 +160,8 @@ function escribirEnv(archivo, valores) {
   try { fs.chmodSync(archivo, 0o600); } catch { /* Windows */ }
 }
 
-function ejecutar(cmd, cmdArgs, { timeout = 60000, shell = ES_WIN } = {}) {
+// sin shell: en Windows claude.exe y bash.exe reciben los argumentos intactos
+function ejecutar(cmd, cmdArgs, { timeout = 60000, shell = false } = {}) {
   return new Promise((resolve) => {
     const hijo = spawn(cmd, cmdArgs, { shell, env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
@@ -255,7 +256,7 @@ async function responderChriss({ pregunta = '', etapa = '', registro = [] }) {
   if (DEMO) return local || 'En la instalación real te respondo con Claude Code. En esta demostración solo tengo respuestas guardadas: prueba con una de las preguntas sugeridas.';
   const contexto = `Etapa actual: ${etapa}. Sistema: ${process.platform} ${process.arch}. Estado de los pasos: ${PASOS.map(p => `${p.id}=${ejecuciones.get(p.id)?.estado || 'pendiente'}`).join(', ')}. Últimas líneas del registro:\n${(registro || []).slice(-40).join('\n').slice(0, 4000)}`;
   const r = await ejecutar('claude', ['-p', '--model', 'haiku', '--no-session-persistence', '--disallowedTools', 'Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch',
-    '--append-system-prompt', `${PERSONA_CHRISS}\n\n${contexto}`, q], { timeout: 90000, shell: false });
+    '--append-system-prompt', `${PERSONA_CHRISS}\n\n${contexto}`, q], { timeout: 90000 });
   const texto = r.out.trim();
   if (r.codigo === 0 && texto) return texto.slice(0, 1500);
   return local || 'Todavía no puedo pensar con IA: primero instala Claude Code e inicia sesión con «claude» en una terminal. Mientras tanto, prueba con una de las preguntas sugeridas.';
